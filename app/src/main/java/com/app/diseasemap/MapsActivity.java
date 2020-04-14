@@ -6,8 +6,6 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
-import android.media.Image;
-import android.renderscript.Allocation;
 import androidx.annotation.DrawableRes;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.FragmentActivity;
@@ -23,13 +21,15 @@ import com.google.maps.android.data.geojson.GeoJsonLayer;
 import com.google.maps.android.data.geojson.GeoJsonPolygonStyle;
 import org.json.JSONException;
 
-import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.util.List;
-import java.util.Random;
+import com.google.gdata.client.spreadsheet.SpreadsheetService;
+import com.google.gdata.data.spreadsheet.CustomElementCollection;
+import com.google.gdata.data.spreadsheet.ListEntry;
+import com.google.gdata.data.spreadsheet.ListFeed;
+import com.google.gdata.util.ServiceException;
 
-import static com.app.diseasemap.GoogleSheetHelper.getData;
+import java.io.IOException;
+import java.net.URL;
+import java.util.Random;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
 
@@ -47,9 +47,14 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         assert mapFragment != null;
         mapFragment.getMapAsync(this);
 
-        for (List<Object> i : getData(SPREADSHEET_ID, "本土病例及境外移入病例" + "(總)" + "!A2:A")) {
-            System.out.println(i.get(0).toString().replace("01~", ""));
-        }
+//        for (List<Object> i : getData(SPREADSHEET_ID, "本土病例及境外移入病例" + "(總)" + "!A2:A")) {
+//            System.out.println(i.get(0).toString().replace("01~", ""));
+//        }
+
+
+        // The ID of the spreadsheet to retrieve metadata from.
+        String spreadsheetId = "1haTOjjWN8vg-6W5CWFn8f3nTEBH581CS1zIk4KfJ9QE";
+        readSheets(spreadsheetId);
     }
 
 
@@ -109,5 +114,38 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         Canvas canvas = new Canvas(bitmap);
         vectorDrawable.draw(canvas);
         return BitmapDescriptorFactory.fromBitmap(bitmap);
+    }
+
+
+    public void readSheets(String sheetID) {
+        SpreadsheetService service = new SpreadsheetService("com.banshee");
+        try {
+            // Notice that the url ends
+            // with default/public/values.
+            // That wasn't obvious (at least to me)
+            // from the documentation.
+            String urlString = "https://spreadsheets.google.com/feeds/list/" + sheetID + "/default/public/values";
+
+            // turn the string into a URL
+            URL url = new URL(urlString);
+
+            // You could substitute a cell feed here in place of
+            // the list feed
+            ListFeed feed = service.getFeed(url, ListFeed.class);
+
+            for (ListEntry entry : feed.getEntries()) {
+                CustomElementCollection elements = entry.getCustomElements();
+                System.out.println(elements);
+//                String name = elements.getValue("高雄市");
+//                System.out.println(name);
+//                String number = elements.getValue("基隆市");
+//                System.out.println(number);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (ServiceException e) {
+            e.printStackTrace();
+        }
+
     }
 }

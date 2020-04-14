@@ -17,14 +17,30 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
+//    packagingOptions {
+//        exclude 'META-INF/DEPENDENCIES'
+//        exclude 'META-INF/LICENSE'
+//        exclude 'META-INF/LICENSE.txt'
+//        exclude 'META-INF/license.txt'
+//        exclude 'META-INF/NOTICE'
+//        exclude 'META-INF/NOTICE.txt'
+//        exclude 'META-INF/notice.txt'
+//        exclude 'META-INF/ASL2.0'
+//        exclude("META-INF/*.kotlin_module")
+//    }
 }
 
 dependencies {
     implementation 'com.google.maps.android:android-maps-utils:1.0.2'
 
-    implementation 'com.google.api-client:google-api-client:1.30.4'
-    implementation 'com.google.oauth-client:google-oauth-client-jetty:1.30.4'
-    implementation 'com.google.apis:google-api-services-sheets:v4-rev581-1.25.0'
+//    compile group: 'com.google.gdata', name: 'core', version: '1.47.1'
+    compile group: 'com.google.gdata', name: 'core', version: '1.47.1'
+
+
+//    implementation 'com.google.api-client:google-api-client:1.30.4'
+//    implementation 'com.google.oauth-client:google-oauth-client-jetty:1.30.4'
+//    implementation 'com.google.apis:google-api-services-sheets:v4-rev581-1.25.0'
 
 
     implementation fileTree(dir: 'libs', include: ['*.jar'])
