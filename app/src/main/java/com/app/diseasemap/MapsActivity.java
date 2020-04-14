@@ -26,9 +26,15 @@ import org.json.JSONException;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.List;
 import java.util.Random;
 
+import static com.app.diseasemap.GoogleSheetHelper.getData;
+
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
+
+    //googleSheet
+    private static String SPREADSHEET_ID = "1haTOjjWN8vg-6W5CWFn8f3nTEBH581CS1zIk4KfJ9QE";
 
     private GoogleMap mMap;
 
@@ -40,6 +46,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
         assert mapFragment != null;
         mapFragment.getMapAsync(this);
+
+        for (List<Object> i : getData(SPREADSHEET_ID, "本土病例及境外移入病例" + "(總)" + "!A2:A")) {
+            System.out.println(i.get(0).toString().replace("01~", ""));
+        }
     }
 
 
