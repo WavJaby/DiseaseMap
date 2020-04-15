@@ -6,7 +6,11 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
+import android.os.Build;
+import android.util.JsonReader;
+import android.view.View;
 import androidx.annotation.DrawableRes;
+import androidx.annotation.RequiresApi;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.FragmentActivity;
 import android.os.Bundle;
@@ -19,42 +23,42 @@ import com.google.android.gms.maps.model.*;
 import com.google.maps.android.data.geojson.GeoJsonFeature;
 import com.google.maps.android.data.geojson.GeoJsonLayer;
 import com.google.maps.android.data.geojson.GeoJsonPolygonStyle;
+import org.json.JSONArray;
 import org.json.JSONException;
+import org.json.JSONObject;
 
-import com.google.gdata.client.spreadsheet.SpreadsheetService;
-import com.google.gdata.data.spreadsheet.CustomElementCollection;
-import com.google.gdata.data.spreadsheet.ListEntry;
-import com.google.gdata.data.spreadsheet.ListFeed;
-import com.google.gdata.util.ServiceException;
-
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URL;
-import java.util.Random;
+import java.nio.charset.Charset;
+import java.util.*;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
 
     //googleSheet
-    private static String SPREADSHEET_ID = "1haTOjjWN8vg-6W5CWFn8f3nTEBH581CS1zIk4KfJ9QE";
+    final String API_KEY = "AIzaSyDE231ta5ozKj75Y-EW1cR7Us07HrHRtng";
+    final String SPREADSHEET_ID = "1haTOjjWN8vg-6W5CWFn8f3nTEBH581CS1zIk4KfJ9QE";
 
     private GoogleMap mMap;
+
+    private JSONObject mapData;
+    private GeoJsonLayer layer;//市區 區域
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_maps);
+        setContentView(R.layout.activity_main);
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
         assert mapFragment != null;
         mapFragment.getMapAsync(this);
 
-//        for (List<Object> i : getData(SPREADSHEET_ID, "本土病例及境外移入病例" + "(總)" + "!A2:A")) {
-//            System.out.println(i.get(0).toString().replace("01~", ""));
-//        }
+        new readSheet("本土病例及境外移入病例(單日新增)").start();//read sheet
 
-
-        // The ID of the spreadsheet to retrieve metadata from.
-        String spreadsheetId = "1haTOjjWN8vg-6W5CWFn8f3nTEBH581CS1zIk4KfJ9QE";
-        readSheets(spreadsheetId);
+//                updateColor(layer);
     }
 
 
@@ -80,72 +84,61 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         mMap.getUiSettings().setCompassEnabled(true);
         mMap.getUiSettings().setMapToolbarEnabled(false);
 
-
-//        mMap.addTileOverlay(new TileOverlayOptions().tileProvider(tileProvider));
         try {
-            GeoJsonLayer layer = new GeoJsonLayer(mMap, R.raw.tw_map, getApplicationContext());
-
-            for (GeoJsonFeature feature : layer.getFeatures()) {
-                GeoJsonPolygonStyle style = new GeoJsonPolygonStyle();//本來的style
-                style.setFillColor(Color.argb(80, 0, new Random().nextInt(255), new Random().nextInt(255)));//改顏色
-                style.setPolygonStrokeWidth(4);//界線寬度
-                feature.setPolygonStyle(style);
-            }
+            layer = new GeoJsonLayer(mMap, R.raw.tw_map_sim, getApplicationContext());
             layer.addLayerToMap();
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (JSONException e) {
+        } catch (IOException | JSONException e) {
             e.printStackTrace();
         }
 
-        mMap.addGroundOverlay(new GroundOverlayOptions()
-                .image(bitmapDescriptorFromVector(this, R.mipmap.ic_launcher))
-                .anchor(0.5f, 0.5f)
-                .position(sydney, 1000, 1000)
-                .transparency(0.5f));
     }
 
-    private BitmapDescriptor bitmapDescriptorFromVector(Context context, @DrawableRes int vectorDrawableResourceId) {
-        Drawable vectorDrawable = ContextCompat.getDrawable(context, vectorDrawableResourceId);
-        int width = vectorDrawable.getIntrinsicWidth();
-        int height = vectorDrawable.getIntrinsicHeight();
-        vectorDrawable.setBounds(0, 0, width, height);
-        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap);
-        vectorDrawable.draw(canvas);
-        return BitmapDescriptorFactory.fromBitmap(bitmap);
+    private void updateColor(GeoJsonLayer layer) {
+        for (GeoJsonFeature feature : layer.getFeatures()) {
+
+            GeoJsonPolygonStyle style = new GeoJsonPolygonStyle();//本來的style
+            style.setFillColor(Color.argb(80, 0, new Random().nextInt(255), new Random().nextInt(255)));//改顏色
+            style.setPolygonStrokeWidth(4);//界線寬度
+            feature.setPolygonStyle(style);
+        }
     }
 
+    class readSheet extends Thread {
 
-    public void readSheets(String sheetID) {
-        SpreadsheetService service = new SpreadsheetService("com.banshee");
-        try {
-            // Notice that the url ends
-            // with default/public/values.
-            // That wasn't obvious (at least to me)
-            // from the documentation.
-            String urlString = "https://spreadsheets.google.com/feeds/list/" + sheetID + "/default/public/values";
+        private String page;
 
-            // turn the string into a URL
-            URL url = new URL(urlString);
+        public readSheet(String page) {
+            this.page = page;
+        }
 
-            // You could substitute a cell feed here in place of
-            // the list feed
-            ListFeed feed = service.getFeed(url, ListFeed.class);
+        @RequiresApi(api = Build.VERSION_CODES.KITKAT)
+        public void run() {
+            String url = "https://sheets.googleapis.com/v4/spreadsheets/" + SPREADSHEET_ID + "/values/" + page + "!A:X?key=" + API_KEY;
+            try {
+                InputStream openUrl = new URL(url).openStream();
+                BufferedReader reader = new BufferedReader(new InputStreamReader(openUrl, Charset.forName("UTF-8")));
 
-            for (ListEntry entry : feed.getEntries()) {
-                CustomElementCollection elements = entry.getCustomElements();
-                System.out.println(elements);
-//                String name = elements.getValue("高雄市");
-//                System.out.println(name);
-//                String number = elements.getValue("基隆市");
-//                System.out.println(number);
+                StringBuilder string = new StringBuilder();//可以append的string(比+=快速的方法)
+                int text;//一個一個讀取text
+                while ((text = reader.read()) != -1) {
+                    string.append((char) text);
+                }
+                mapData = new JSONObject(string.toString());
+                JSONArray ja = mapData.getJSONArray("values"); // get the JSONArray
+                List<String> keys = new ArrayList<>();
+
+                for (int i = 0; i < ja.length(); i++) {
+//                    JSONArray ja2 = new JSONArray(ja.get(i));
+                    System.out.printf("%d,%s\n",i,ja.get(i));
+//                    System.out.println(ja2.get(0));
+                }
+
+                System.out.println(mapData);
+                System.out.println(keys);
+
+            } catch (IOException | JSONException e) {
+                e.printStackTrace();
             }
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (ServiceException e) {
-            e.printStackTrace();
         }
-
     }
 }
