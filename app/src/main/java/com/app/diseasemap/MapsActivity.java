@@ -1,17 +1,9 @@
 package com.app.diseasemap;
 
 import android.annotation.SuppressLint;
-import android.content.Context;
-import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.drawable.Drawable;
 import android.os.Build;
-import android.util.JsonReader;
-import android.view.View;
-import androidx.annotation.DrawableRes;
+import android.widget.SeekBar;
 import androidx.annotation.RequiresApi;
-import androidx.core.content.ContextCompat;
 import androidx.fragment.app.FragmentActivity;
 import android.os.Bundle;
 
@@ -40,11 +32,19 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     //googleSheet
     final String API_KEY = "AIzaSyDE231ta5ozKj75Y-EW1cR7Us07HrHRtng";
     final String SPREADSHEET_ID = "1haTOjjWN8vg-6W5CWFn8f3nTEBH581CS1zIk4KfJ9QE";
+    final List<String> cityList = new ArrayList<>(Arrays.asList(
+            "臺北市", "臺中市", "臺南市", "高雄市", "基隆市", "新竹市", "嘉義市", "新北市", "桃園市", "新竹縣", "宜蘭縣",
+            "苗栗縣", "彰化縣", "南投縣", "雲林縣", "嘉義縣", "屏東縣", "澎湖縣", "花蓮縣", "臺東縣", "金門縣", "連江縣"));
 
+    //google map
     private GoogleMap mMap;
 
-    private JSONObject mapData;
+    //color layout
+    private Map<String, List<Integer>> sortedData;
     private GeoJsonLayer layer;//市區 區域
+    private int[] colorValue = {0,1,2,3};//區域顏色設定
+
+    private SeekBar dateSeekBar;
 
 
     @Override
@@ -58,9 +58,24 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         new readSheet("本土病例及境外移入病例(單日新增)").start();//read sheet
 
-//                updateColor(layer);
-    }
+        dateSeekBar = findViewById(R.id.time_line);
+        dateSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
 
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
+            }
+        });
+    }
 
     /**
      * Manipulates the map once available.
@@ -83,6 +98,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         mMap.getUiSettings().setZoomControlsEnabled(true);
         mMap.getUiSettings().setCompassEnabled(true);
         mMap.getUiSettings().setMapToolbarEnabled(false);
+        mMap.setMyLocationEnabled(true);
 
         try {
             layer = new GeoJsonLayer(mMap, R.raw.tw_map_sim, getApplicationContext());
@@ -91,13 +107,32 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             e.printStackTrace();
         }
 
+        while (sortedData.isEmpty()) {
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+        updateColor(layer);
     }
 
     private void updateColor(GeoJsonLayer layer) {
+        List<Integer> ctValues = sortedData.get("3/17");
         for (GeoJsonFeature feature : layer.getFeatures()) {
-
+            int index = cityList.indexOf(feature.getProperty("名稱"));
+            int value = ctValues.get(index);
             GeoJsonPolygonStyle style = new GeoJsonPolygonStyle();//本來的style
-            style.setFillColor(Color.argb(80, 0, new Random().nextInt(255), new Random().nextInt(255)));//改顏色
+            if (value == colorValue[0])
+                style.setFillColor(getResources().getColor(R.color.dark_green));//改顏色
+            if (value > colorValue[0] && value <= colorValue[1])
+                style.setFillColor(getResources().getColor(R.color.green));//改顏色
+            if (value > colorValue[1] && value <= colorValue[2])
+                style.setFillColor(getResources().getColor(R.color.yellow));//改顏色
+            if (value > colorValue[2] && value <= colorValue[3])
+                style.setFillColor(getResources().getColor(R.color.orange));//改顏色
+            if (value > colorValue[3])
+                style.setFillColor(getResources().getColor(R.color.red));//改顏色
             style.setPolygonStrokeWidth(4);//界線寬度
             feature.setPolygonStyle(style);
         }
@@ -123,18 +158,24 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 while ((text = reader.read()) != -1) {
                     string.append((char) text);
                 }
-                mapData = new JSONObject(string.toString());
-                JSONArray ja = mapData.getJSONArray("values"); // get the JSONArray
-                List<String> keys = new ArrayList<>();
+                JSONObject mapData = new JSONObject(string.toString());//把string變成Json
+                JSONArray row = mapData.getJSONArray("values"); //取得JSONArray
+                sortedData = new HashMap<>();
 
-                for (int i = 0; i < ja.length(); i++) {
-//                    JSONArray ja2 = new JSONArray(ja.get(i));
-                    System.out.printf("%d,%s\n",i,ja.get(i));
-//                    System.out.println(ja2.get(0));
+                for (int i = 1; i < row.length(); i++) {
+                    JSONArray jsonY = row.getJSONArray(i);
+                    List<Integer> values = new ArrayList<>();
+                    if (jsonY.length() > 1) {//有資料嗎?
+                        for (int j = 1; j < jsonY.length(); j++) {//得到每一欄
+                            values.add(Integer.parseInt(jsonY.get(j).toString()));
+                        }
+                        sortedData.put(row.getJSONArray(i).get(0).toString(), values);
+                    }
                 }
 
-                System.out.println(mapData);
-                System.out.println(keys);
+                for (Map.Entry<String, List<Integer>> i : sortedData.entrySet()) {
+                    System.out.println(i);
+                }
 
             } catch (IOException | JSONException e) {
                 e.printStackTrace();
