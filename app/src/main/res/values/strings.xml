@@ -3,8 +3,8 @@
     <string name="title_activity_maps">Map</string>
     
     <string-array name="spinner_date">
-        <item>Year</item>
-        <item>Month</item>
         <item>Day</item>
+        <item>Month</item>
+        <item>Year</item>
     </string-array>
 </resources>

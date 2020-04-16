@@ -2,6 +2,7 @@ package com.app.diseasemap;
 
 import android.annotation.SuppressLint;
 import android.os.Build;
+import android.text.method.SingleLineTransformationMethod;
 import android.widget.SeekBar;
 import androidx.annotation.RequiresApi;
 import androidx.fragment.app.FragmentActivity;
@@ -25,6 +26,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URL;
 import java.nio.charset.Charset;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
@@ -41,7 +43,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private Boolean mapReady = false;
 
     //color layout
-    private Map<String, List<Integer>> sortedData = new HashMap<>() ;
+    private Map<String, List<Integer>> sortedData = new HashMap<>();
     private GeoJsonLayer layer;//市區 區域
     private int[] colorValue = {0, 1, 2, 3};//區域顏色設定
 
@@ -54,7 +56,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         setContentView(R.layout.activity_main);
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
-        assert mapFragment != null;
         mapFragment.getMapAsync(this);
 
         new readSheet("本土病例及境外移入病例(單日新增)").start();//read sheet
@@ -63,12 +64,13 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         dateSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-
+                updateColor("");
             }
 
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {
-
+                int maxVal = sortedData.keySet().size();
+                seekBar.setMax(maxVal);
             }
 
             @Override
@@ -112,24 +114,29 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         while (sortedData.isEmpty()) {
             try {
-                Thread.sleep(500);
+                Thread.sleep(100);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }
-        updateColor(layer);
+
+        SimpleDateFormat fmt = new SimpleDateFormat("MM/dd");
+        Date date = new Date();//現在
+//        date.setDate(date.getDay() - 1);//昨天
+        System.out.println(fmt.format(date));
+        updateColor(fmt.format(date));
 
     }
 
-    private void setUpLegend(){
+    private void setUpLegend() {
         findViewById(R.id.low_level);
         findViewById(R.id.middle_level);
         findViewById(R.id.high_level);
         findViewById(R.id.max_level);
     }
 
-    private void updateColor(GeoJsonLayer layer) {
-        List<Integer> ctValues = sortedData.get("3/17");
+    private void updateColor(String date) {
+        List<Integer> ctValues = sortedData.get(date);
         for (GeoJsonFeature feature : layer.getFeatures()) {
             GeoJsonPolygonStyle style = new GeoJsonPolygonStyle();//本來的style
             int index = cityList.indexOf(feature.getProperty("名稱"));
