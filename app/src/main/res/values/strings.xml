@@ -1,4 +1,10 @@
 <resources>
     <string name="app_name">DiseaseMap</string>
     <string name="title_activity_maps">Map</string>
+    
+    <string-array name="spinner_date">
+        <item>Year</item>
+        <item>Month</item>
+        <item>Day</item>
+    </string-array>
 </resources>

@@ -27,8 +27,7 @@
             app:layout_constraintBottom_toBottomOf="parent"
             android:layout_marginLeft="8dp"
             android:layout_marginStart="8dp"
-            android:textSize="18sp"
-            android:textStyle="bold"/>
+            android:entries="@array/spinner_date"/>
     <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -56,28 +55,30 @@
     <LinearLayout
             android:orientation="vertical"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content" app:layout_constraintStart_toStartOf="parent"
+            android:layout_height="wrap_content"
+            app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintBottom_toTopOf="@+id/time_line_spinner">
         <TextView
                 android:text="0"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:id="@+id/people_0"
-                android:background="@color/dark_green"/>
+                android:background="@color/dark_green"
+        />
         <TextView
-                android:text="1~2"
+                android:text=" 1~2 "
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:id="@+id/low_level"
                 android:background="@color/green"/>
         <TextView
-                android:text="3~4"
+                android:text=" 3~4"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:id="@+id/middle_level"
                 android:background="@color/yellow"/>
         <TextView
-                android:text="5~6"
+                android:text=" 5~6 "
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:id="@+id/high_level"

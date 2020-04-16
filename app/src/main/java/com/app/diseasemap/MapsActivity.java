@@ -38,11 +38,12 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     //google map
     private GoogleMap mMap;
+    private Boolean mapReady = false;
 
     //color layout
-    private Map<String, List<Integer>> sortedData;
+    private Map<String, List<Integer>> sortedData = new HashMap<>() ;
     private GeoJsonLayer layer;//市區 區域
-    private int[] colorValue = {0,1,2,3};//區域顏色設定
+    private int[] colorValue = {0, 1, 2, 3};//區域顏色設定
 
     private SeekBar dateSeekBar;
 
@@ -91,21 +92,23 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
 
-        // Add a marker in Sydney and move the camera
-        LatLng sydney = new LatLng(25.05, 121.54);
-        mMap.addMarker(new MarkerOptions().position(sydney).title("this"));
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(sydney, 10));
         mMap.getUiSettings().setZoomControlsEnabled(true);
         mMap.getUiSettings().setCompassEnabled(true);
         mMap.getUiSettings().setMapToolbarEnabled(false);
+        mMap.setMaxZoomPreference(10);
         mMap.setMyLocationEnabled(true);
 
         try {
             layer = new GeoJsonLayer(mMap, R.raw.tw_map_sim, getApplicationContext());
+            layer.getDefaultPolygonStyle().setPolygonStrokeWidth(4);//界線寬度
             layer.addLayerToMap();
         } catch (IOException | JSONException e) {
             e.printStackTrace();
         }
+
+        // Add a Sydney and move the camera
+        LatLng myLocation = layer.getBoundingBox().getCenter();
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(myLocation, 7));
 
         while (sortedData.isEmpty()) {
             try {
@@ -115,14 +118,26 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             }
         }
         updateColor(layer);
+
+    }
+
+    private void setUpLegend(){
+        findViewById(R.id.low_level);
+        findViewById(R.id.middle_level);
+        findViewById(R.id.high_level);
+        findViewById(R.id.max_level);
     }
 
     private void updateColor(GeoJsonLayer layer) {
         List<Integer> ctValues = sortedData.get("3/17");
         for (GeoJsonFeature feature : layer.getFeatures()) {
+            GeoJsonPolygonStyle style = new GeoJsonPolygonStyle();//本來的style
             int index = cityList.indexOf(feature.getProperty("名稱"));
             int value = ctValues.get(index);
-            GeoJsonPolygonStyle style = new GeoJsonPolygonStyle();//本來的style
+
+            LatLng sydney = feature.getBoundingBox().getCenter();
+            mMap.addMarker(new MarkerOptions().position(sydney).title(feature.getProperty("名稱") + "確診: " + value));
+
             if (value == colorValue[0])
                 style.setFillColor(getResources().getColor(R.color.dark_green));//改顏色
             if (value > colorValue[0] && value <= colorValue[1])
@@ -133,7 +148,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 style.setFillColor(getResources().getColor(R.color.orange));//改顏色
             if (value > colorValue[3])
                 style.setFillColor(getResources().getColor(R.color.red));//改顏色
-            style.setPolygonStrokeWidth(4);//界線寬度
+
             feature.setPolygonStyle(style);
         }
     }
@@ -160,7 +175,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 }
                 JSONObject mapData = new JSONObject(string.toString());//把string變成Json
                 JSONArray row = mapData.getJSONArray("values"); //取得JSONArray
-                sortedData = new HashMap<>();
 
                 for (int i = 1; i < row.length(); i++) {
                     JSONArray jsonY = row.getJSONArray(i);
@@ -172,11 +186,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         sortedData.put(row.getJSONArray(i).get(0).toString(), values);
                     }
                 }
-
-                for (Map.Entry<String, List<Integer>> i : sortedData.entrySet()) {
-                    System.out.println(i);
-                }
-
+//                for (Map.Entry<String, List<Integer>> i : sortedData.entrySet()) {
+//                    System.out.println(i);
+//                }
             } catch (IOException | JSONException e) {
                 e.printStackTrace();
             }
