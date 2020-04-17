@@ -9,4 +9,6 @@
     <color name="yellow">#99FFEB3B</color>
     <color name="orange">#99FF9800</color>
     <color name="red">#99F44336</color>
+
+    <color name="back_ground_color">#80FFFFFF</color>
 </resources>

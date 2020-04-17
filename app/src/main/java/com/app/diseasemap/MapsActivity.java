@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.os.Build;
 import android.text.method.SingleLineTransformationMethod;
 import android.widget.SeekBar;
+import android.widget.TextView;
 import androidx.annotation.RequiresApi;
 import androidx.fragment.app.FragmentActivity;
 import android.os.Bundle;
@@ -24,6 +25,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.lang.reflect.Array;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.text.SimpleDateFormat;
@@ -40,14 +42,18 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     //google map
     private GoogleMap mMap;
-    private Boolean mapReady = false;
 
     //color layout
     private Map<String, List<Integer>> sortedData = new HashMap<>();
+    private List<String> day = new ArrayList<>();
     private GeoJsonLayer layer;//市區 區域
     private int[] colorValue = {0, 1, 2, 3};//區域顏色設定
+    private Map<Integer, Marker> mkList = new HashMap<>();
 
     private SeekBar dateSeekBar;
+    private TextView dateView;
+
+    private String lastDate;
 
 
     @Override
@@ -60,16 +66,18 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         new readSheet("本土病例及境外移入病例(單日新增)").start();//read sheet
 
+        dateView = findViewById(R.id.date_text);
         dateSeekBar = findViewById(R.id.time_line);
         dateSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                updateColor("");
+                updateColor(day.get(progress), false);
+                dateView.setText(day.get(progress));
             }
 
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {
-                int maxVal = sortedData.keySet().size();
+                int maxVal = day.size() - 1;
                 seekBar.setMax(maxVal);
             }
 
@@ -102,7 +110,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         try {
             layer = new GeoJsonLayer(mMap, R.raw.tw_map_sim, getApplicationContext());
-            layer.getDefaultPolygonStyle().setPolygonStrokeWidth(4);//界線寬度
             layer.addLayerToMap();
         } catch (IOException | JSONException e) {
             e.printStackTrace();
@@ -122,42 +129,71 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         SimpleDateFormat fmt = new SimpleDateFormat("MM/dd");
         Date date = new Date();//現在
-//        date.setDate(date.getDay() - 1);//昨天
-        System.out.println(fmt.format(date));
-        updateColor(fmt.format(date));
+        date.setDate(date.getDate() - 1);//昨天
+        updateColor(fmt.format(date), true);//畫顏色
+        setUpLegend();//圖例
+
+        dateView.setText(fmt.format(date));
+        dateSeekBar.setProgress(day.size());
 
     }
 
     private void setUpLegend() {
-        findViewById(R.id.low_level);
-        findViewById(R.id.middle_level);
-        findViewById(R.id.high_level);
-        findViewById(R.id.max_level);
+        ((TextView) findViewById(R.id.low_level)).setText((colorValue[0] + 1) + "~" + colorValue[1]);
+        ((TextView) findViewById(R.id.middle_level)).setText((colorValue[1] + 1) + "~" + colorValue[2]);
+        ((TextView) findViewById(R.id.high_level)).setText((colorValue[2] + 1) + "~" + colorValue[3]);
+        ((TextView) findViewById(R.id.max_level)).setText((colorValue[3] + 1) + ">");
     }
 
-    private void updateColor(String date) {
+    private void updateColor(String date, boolean first) {
         List<Integer> ctValues = sortedData.get(date);
+        List<Integer> lstCtValues = sortedData.get(lastDate);
+
         for (GeoJsonFeature feature : layer.getFeatures()) {
             GeoJsonPolygonStyle style = new GeoJsonPolygonStyle();//本來的style
             int index = cityList.indexOf(feature.getProperty("名稱"));
             int value = ctValues.get(index);
 
             LatLng sydney = feature.getBoundingBox().getCenter();
-            mMap.addMarker(new MarkerOptions().position(sydney).title(feature.getProperty("名稱") + "確診: " + value));
 
-            if (value == colorValue[0])
-                style.setFillColor(getResources().getColor(R.color.dark_green));//改顏色
-            if (value > colorValue[0] && value <= colorValue[1])
-                style.setFillColor(getResources().getColor(R.color.green));//改顏色
-            if (value > colorValue[1] && value <= colorValue[2])
-                style.setFillColor(getResources().getColor(R.color.yellow));//改顏色
-            if (value > colorValue[2] && value <= colorValue[3])
-                style.setFillColor(getResources().getColor(R.color.orange));//改顏色
-            if (value > colorValue[3])
-                style.setFillColor(getResources().getColor(R.color.red));//改顏色
+            if (first) {
+                mkList.put(index, mMap.addMarker(new MarkerOptions().position(sydney)));
+                mkList.get(index).setTitle(feature.getProperty("名稱") + "確診: " + value);
+//                mkList.set(index, mMap.addMarker(new MarkerOptions().position(sydney).title(feature.getProperty("名稱") + "確診: " + value)));
 
-            feature.setPolygonStyle(style);
+                if (value == colorValue[0])
+                    style.setFillColor(getResources().getColor(R.color.dark_green));//改顏色
+                if (value > colorValue[0] && value <= colorValue[1])
+                    style.setFillColor(getResources().getColor(R.color.green));//改顏色
+                if (value > colorValue[1] && value <= colorValue[2])
+                    style.setFillColor(getResources().getColor(R.color.yellow));//改顏色
+                if (value > colorValue[2] && value <= colorValue[3])
+                    style.setFillColor(getResources().getColor(R.color.orange));//改顏色
+                if (value > colorValue[3])
+                    style.setFillColor(getResources().getColor(R.color.red));//改顏色
+
+                style.setPolygonStrokeWidth(4);//界線寬度
+                feature.setPolygonStyle(style);
+
+            } else if (lstCtValues.get(index) != value) {
+                mkList.get(index).setTitle(feature.getProperty("名稱") + "確診: " + value);
+
+                if (value == colorValue[0])
+                    style.setFillColor(getResources().getColor(R.color.dark_green));//改顏色
+                if (value > colorValue[0] && value <= colorValue[1])
+                    style.setFillColor(getResources().getColor(R.color.green));//改顏色
+                if (value > colorValue[1] && value <= colorValue[2])
+                    style.setFillColor(getResources().getColor(R.color.yellow));//改顏色
+                if (value > colorValue[2] && value <= colorValue[3])
+                    style.setFillColor(getResources().getColor(R.color.orange));//改顏色
+                if (value > colorValue[3])
+                    style.setFillColor(getResources().getColor(R.color.red));//改顏色
+
+                style.setPolygonStrokeWidth(4);//界線寬度
+                feature.setPolygonStyle(style);
+            }
         }
+        lastDate = date;
     }
 
     class readSheet extends Thread {
@@ -190,9 +226,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         for (int j = 1; j < jsonY.length(); j++) {//得到每一欄
                             values.add(Integer.parseInt(jsonY.get(j).toString()));
                         }
+                        day.add(row.getJSONArray(i).get(0).toString());
                         sortedData.put(row.getJSONArray(i).get(0).toString(), values);
                     }
                 }
+                System.out.println(day);
 //                for (Map.Entry<String, List<Integer>> i : sortedData.entrySet()) {
 //                    System.out.println(i);
 //                }
