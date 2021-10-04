@@ -1,37 +1,27 @@
 package com.app.diseasemap;
 
 import android.annotation.SuppressLint;
-import android.os.Build;
-import android.text.method.SingleLineTransformationMethod;
+import android.os.Bundle;
 import android.widget.SeekBar;
 import android.widget.TextView;
-import androidx.annotation.RequiresApi;
 import androidx.fragment.app.FragmentActivity;
-import android.os.Bundle;
-
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
-import com.google.android.gms.maps.model.*;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.maps.android.data.geojson.GeoJsonFeature;
 import com.google.maps.android.data.geojson.GeoJsonLayer;
 import com.google.maps.android.data.geojson.GeoJsonPolygonStyle;
-import org.json.JSONArray;
 import org.json.JSONException;
-import org.json.JSONObject;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.lang.reflect.Array;
-import java.net.URL;
-import java.nio.charset.Charset;
-import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
 
-public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
+public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, SheetReader.SheetEvent {
 
     //googleSheet
     final String API_KEY = "AIzaSyDE231ta5ozKj75Y-EW1cR7Us07HrHRtng";
@@ -39,20 +29,23 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     final List<String> cityList = new ArrayList<>(Arrays.asList(
             "臺北市", "臺中市", "臺南市", "高雄市", "基隆市", "新竹市", "嘉義市", "新北市", "桃園市", "新竹縣", "宜蘭縣",
             "苗栗縣", "彰化縣", "南投縣", "雲林縣", "嘉義縣", "屏東縣", "澎湖縣", "花蓮縣", "臺東縣", "金門縣", "連江縣"));
+    SheetReader sheet;
 
     //google map
     private GoogleMap mMap;
 
     //color layout
-    private Map<String, List<Integer>> sortedData = new HashMap<>();
-    private List<String> day = new ArrayList<>();
     private GeoJsonLayer layer;//市區 區域
     private int[] colorValue = {0, 1, 2, 3};//區域顏色設定
     private Map<Integer, Marker> mkList = new HashMap<>();
 
+    //element
     private SeekBar dateSeekBar;
     private TextView dateView;
 
+    //data
+    private LinkedHashMap<String, List<Integer>> sortedData;
+    private String[] days;
     private String lastDate;
 
 
@@ -60,43 +53,22 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
+        sheet = new SheetReader(SPREADSHEET_ID, API_KEY, "本土病例及境外移入病例(單日新增)");
 
-        new readSheet("本土病例及境外移入病例(單日新增)").start();//read sheet
+        sheet.setListener(this);
+
+        //取得資料
+        sheet.startRead();
 
         dateView = findViewById(R.id.date_text);
         dateSeekBar = findViewById(R.id.time_line);
-        dateSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                updateColor(day.get(progress), false);
-                dateView.setText(day.get(progress));
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-                int maxVal = day.size() - 1;
-                seekBar.setMax(maxVal);
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-
-            }
-        });
     }
 
-    /**
-     * Manipulates the map once available.
-     * This callback is triggered when the map is ready to be used.
-     * This is where we can add markers or lines, add listeners or move the camera. In this case,
-     * we just add a marker near Sydney, Australia.
-     * If Google Play services is not installed on the device, the user will be prompted to install
-     * it inside the SupportMapFragment. This method will only be triggered once the user has
-     * installed Google Play services and returned to the app.
-     */
+
+    private CountDownLatch mapReady = new CountDownLatch(1);
+
     @SuppressLint("ResourceType")
     @Override
     public void onMapReady(GoogleMap googleMap) {
@@ -119,23 +91,41 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         LatLng myLocation = layer.getBoundingBox().getCenter();
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(myLocation, 7));
 
-        while (sortedData.isEmpty()) {
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+        mapReady.countDown();
+    }
+
+    @Override
+    public void onSheetRead(LinkedHashMap<String, List<Integer>> sortedData) {
+        this.sortedData = sortedData;
+        days = sortedData.keySet().toArray(new String[0]);
+        try {
+            mapReady.await();
+
+            runOnUiThread(() -> {
+                setUpLegend();//圖例
+                updateColor(days[days.length - 1], true);//畫顏色
+
+                //時間軸
+                dateSeekBar.setMax(days.length - 1);
+                dateSeekBar.setProgress(days.length - 1);
+                dateSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                    @Override
+                    public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                        updateColor(days[progress], false);
+                    }
+
+                    @Override
+                    public void onStartTrackingTouch(SeekBar seekBar) {
+                    }
+
+                    @Override
+                    public void onStopTrackingTouch(SeekBar seekBar) {
+                    }
+                });
+            });
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
-
-        SimpleDateFormat fmt = new SimpleDateFormat("MM/dd");
-        Date date = new Date();//現在
-        date.setDate(date.getDate() - 1);//昨天
-        updateColor(fmt.format(date), true);//畫顏色
-        setUpLegend();//圖例
-
-        dateView.setText(fmt.format(date));
-        dateSeekBar.setProgress(day.size());
-
     }
 
     private void setUpLegend() {
@@ -148,6 +138,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private void updateColor(String date, boolean first) {
         List<Integer> ctValues = sortedData.get(date);
         List<Integer> lstCtValues = sortedData.get(lastDate);
+        dateView.setText(date);
 
         for (GeoJsonFeature feature : layer.getFeatures()) {
             GeoJsonPolygonStyle style = new GeoJsonPolygonStyle();//本來的style
@@ -172,7 +163,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 if (value > colorValue[3])
                     style.setFillColor(getResources().getColor(R.color.red));//改顏色
 
-                style.setPolygonStrokeWidth(4);//界線寬度
+                style.setPolygonStrokeWidth(2);//界線寬度
                 feature.setPolygonStyle(style);
 
             } else if (lstCtValues.get(index) != value) {
@@ -189,54 +180,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 if (value > colorValue[3])
                     style.setFillColor(getResources().getColor(R.color.red));//改顏色
 
-                style.setPolygonStrokeWidth(4);//界線寬度
+                style.setPolygonStrokeWidth(2);//界線寬度
                 feature.setPolygonStyle(style);
             }
         }
         lastDate = date;
-    }
-
-    class readSheet extends Thread {
-
-        private String page;
-
-        public readSheet(String page) {
-            this.page = page;
-        }
-
-        @RequiresApi(api = Build.VERSION_CODES.KITKAT)
-        public void run() {
-            String url = "https://sheets.googleapis.com/v4/spreadsheets/" + SPREADSHEET_ID + "/values/" + page + "!A:X?key=" + API_KEY;
-            try {
-                InputStream openUrl = new URL(url).openStream();
-                BufferedReader reader = new BufferedReader(new InputStreamReader(openUrl, Charset.forName("UTF-8")));
-
-                StringBuilder string = new StringBuilder();//可以append的string(比+=快速的方法)
-                int text;//一個一個讀取text
-                while ((text = reader.read()) != -1) {
-                    string.append((char) text);
-                }
-                JSONObject mapData = new JSONObject(string.toString());//把string變成Json
-                JSONArray row = mapData.getJSONArray("values"); //取得JSONArray
-
-                for (int i = 1; i < row.length(); i++) {
-                    JSONArray jsonY = row.getJSONArray(i);
-                    List<Integer> values = new ArrayList<>();
-                    if (jsonY.length() > 1) {//有資料嗎?
-                        for (int j = 1; j < jsonY.length(); j++) {//得到每一欄
-                            values.add(Integer.parseInt(jsonY.get(j).toString()));
-                        }
-                        day.add(row.getJSONArray(i).get(0).toString());
-                        sortedData.put(row.getJSONArray(i).get(0).toString(), values);
-                    }
-                }
-                System.out.println(day);
-//                for (Map.Entry<String, List<Integer>> i : sortedData.entrySet()) {
-//                    System.out.println(i);
-//                }
-            } catch (IOException | JSONException e) {
-                e.printStackTrace();
-            }
-        }
     }
 }
